@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 public class MyBot
 {
@@ -25,10 +27,14 @@ public class MyBot
         Networking.SendInit(MyBotName); // Acknoweldge the init and begin the game
 
         var random = new Random();
+#if DEBUG
         using (var writer = new StreamWriter(File.Create(@"C:\Temp\Halite.log"))) {
+#endif
             int turn = 1;
             while (true) {
+#if DEBUG
                 writer.WriteLine($"Starting turn {turn}");
+#endif
                 Networking.getFrame(ref map); // Update the map to reflect the moves before this turn
                 players = new List<Player>();
                 var moves = new List<Move>();
@@ -38,19 +44,24 @@ public class MyBot
                     }
                 }
 
-                foreach (var player in players.Where(p => p.Site.Owner == myID)) {
+                foreach (var player in players.Where(p => p.Site.Owner == myID)){ 
                     if (player.Site.Owner == myID) {
                         var direction = Direction.Still;
+#if DEBUG
                         writer.WriteLine($"Deciding where to move for location{player}");
+#endif
                         var location = new Location { X = player.X, Y = player.Y };
                         var adjacent = new List<Player> { player.North, player.East, player.South, player.West };
+#if DEBUG
                         writer.WriteLine($"\tFound adjacent players: \n\tNorth{player.North}\n\tSouth{player.South}\n\tEast{player.East}\n\tWest{player.West}");
+#endif
                         var open = adjacent.Where(a => a.Site.Owner != myID);
                         if (!open.Any())
                         {
-                            if (player.Site.Strength > 20)
-                            {
+                            if (player.Site.Strength > 20) {
+#if DEBUG
                                 writer.WriteLine($"In the safe zone, deciding who needs help...");
+#endif
                                 direction = FindNearestPerimeter(player);
                             }
                         } else {
@@ -72,41 +83,65 @@ public class MyBot
                                 }
                             }
                         }
+#if DEBUG
                         writer.WriteLine($"\tMoving {direction} from [{location.X},{location.Y}]");
+#endif
                         moves.Add(new Move { Direction = direction, Location = location });
                     }
                 }
                 Networking.SendMoves(moves); // Send moves
                 turn++;
             }
+#if DEBUG
         }
+#endif
     }
 
     private static Direction FindNearestPerimeter(Player player)
     {
         var location = CheckBoundingSquare(player.X, player.Y, player.X, player.Y);
         var orientation = Math.Abs(player.X - location.X) >= Math.Abs(player.Y - location.Y) ? Orientation.Horizontal : Orientation.Vertical;
-        if (orientation == Orientation.Vertical)
+        if (orientation == Orientation.Horizontal)
             return player.X - location.X > 0 ? Direction.West : Direction.East;
         return player.Y - location.Y > 0 ? Direction.North : Direction.South;
     }
 
     private static Location CheckBoundingSquare(ushort minX, ushort minY, ushort maxX, ushort maxY)
     {
-        minX = minX > 0 ? (ushort) (minX - 1) : (ushort) (map.Width - 1);
-        minY = minY > 0 ? (ushort) (minY - 1) : (ushort) (map.Height - 1);
-        maxX = maxX < map.Width - 1 ? (ushort) (maxX + 1) : (ushort) 0;
-        maxY = maxY < map.Height - 1 ? (ushort) (maxY + 1) : (ushort) 0;
+        minX = minX == 0 ? (ushort) (map.Width - 1) : (ushort) (minX - 1);
+        minY = minY == 0 ? (ushort) (map.Height - 1) : (ushort) (minY - 1);
+        maxX = maxX == map.Width - 1 ? (ushort) 0 : (ushort) (maxX + 1);
+        maxY = maxY == map.Height - 1 ? (ushort) 0 : (ushort) (maxY + 1);
 
-        for (int x = minX; x < maxX; x++)
-        {
-            for (int y = minY; y < maxY; y++)
-            {
-                if (map[(ushort) x, (ushort) y].Owner != myID)
-                    return new Location {X = (ushort) x, Y = (ushort) y};
-            }
+        for (int x = minX; x != maxX; Wrap(ref x, map.Width)) {
+            if (map[(ushort)x, minY].Owner != myID)
+                return new Location { X = (ushort)x, Y = minY };
         }
+
+        for (int x = minX; x != maxX; Wrap(ref x, map.Width)) {
+            if (map[(ushort)x, maxY].Owner != myID)
+                return new Location { X = (ushort)x, Y = maxY };
+        }
+
+        for (int y = minY; y != maxY; Wrap(ref y, map.Height)) {
+            if (map[minX, (ushort)y].Owner != myID)
+                return new Location { X = minX, Y = (ushort)y};
+        }
+
+        for (int y = minY; y != maxY; Wrap(ref y, map.Height)) {
+            if (map[maxX, (ushort)y].Owner != myID)
+                return new Location { X = maxX, Y = (ushort)y };
+        }
+
         return CheckBoundingSquare(minX, minY, maxX, maxY);
+    }
+
+    private static void Wrap(ref int i, int max)
+    {
+        if(i == max - 1)
+            i = 0;
+        else
+            i++;
     }
 
     private class Player
