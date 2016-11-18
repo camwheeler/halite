@@ -76,7 +76,6 @@ public class MyBot
                         moves.Add(new Move { Direction = direction, Location = location });
                     }
                 }
-
                 Networking.SendMoves(moves); // Send moves
                 turn++;
             }
@@ -86,7 +85,10 @@ public class MyBot
     private static Direction FindNearestPerimeter(Player player)
     {
         var location = CheckBoundingSquare(player.X, player.Y, player.X, player.Y);
-        
+        var orientation = Math.Abs(player.X - location.X) >= Math.Abs(player.Y - location.Y) ? Orientation.Horizontal : Orientation.Vertical;
+        if (orientation == Orientation.Vertical)
+            return player.X - location.X > 0 ? Direction.West : Direction.East;
+        return player.Y - location.Y > 0 ? Direction.North : Direction.South;
     }
 
     private static Location CheckBoundingSquare(ushort minX, ushort minY, ushort maxX, ushort maxY)
@@ -145,5 +147,11 @@ public class MyBot
         {
             return $"\t[{X},{Y}]: S {Site.Strength} | O {Site.Owner} | P {Site.Production}";
         }
+    }
+
+    private enum Orientation
+    {
+        Horizontal,
+        Vertical
     }
 }
