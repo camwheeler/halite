@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 
 /// <summary>
 /// Helpful for debugging.
@@ -23,9 +21,9 @@ public static class Log
         if (!string.IsNullOrEmpty(_logPath))
             File.AppendAllLines(_logPath, new[] {string.Format("{0}: {1}", DateTime.Now.ToShortTimeString(), message)});
     }
-    
+
     public static void Error(Exception exception) {
-        Log.Information(string.Format("ERROR: {0} {1}", exception.Message, exception.StackTrace));
+        Information(string.Format("ERROR: {0} {1}", exception.Message, exception.StackTrace));
     }
 }
 
@@ -37,15 +35,12 @@ public static class Networking
         return str;
     }
 
-    private static void SendString(string str) {
-        Console.WriteLine(str);
-    }
+    private static void SendString(string str) { Console.WriteLine(str); }
 
     /// <summary>
     /// Call once at the start of a game to load the map and player tag from the first four stdin lines.
     /// </summary>
     public static Map getInit(out ushort playerTag) {
-
         // Line 1: Player tag
         if (!ushort.TryParse(ReadNextLine(), out playerTag))
             throw new ApplicationException("Could not get player tag from stdin during init");
@@ -61,7 +56,6 @@ public static class Networking
     public static void getFrame(ref Map map) {
         map.Update(ReadNextLine());
     }
-
 
     /// <summary>
     /// Call to acknowledge the initail game map and start the game.
@@ -106,7 +100,8 @@ public struct Move
     public Direction Direction;
 
     internal static string MovesToString(IEnumerable<Move> moves) {
-        return string.Join(" ", moves.Select(m => string.Format("{0} {1} {2}", m.Location.X, m.Location.Y, (int)m.Direction)));
+        return string.Join(" ",
+            moves.Select(m => string.Format("{0} {1} {2}", m.Location.X, m.Location.Y, (int) m.Direction)));
     }
 }
 
@@ -138,14 +133,13 @@ public class Map
         }
 
         var strengthValues = gameMapValues; // Referencing same queue, but using a name that is more clear
-        for (y = 0; y < Height; y++) {
+        for (y = 0; y < Height; y++)
             for (x = 0; x < Width; x++) {
                 ushort strength;
                 if (!ushort.TryParse(strengthValues.Dequeue(), out strength))
                     throw new ApplicationException("Could not get some strength value from stdin");
                 _sites[x, y].Strength = strength;
             }
-        }
     }
 
     /// <summary>
@@ -154,9 +148,11 @@ public class Map
     public Site this[ushort x, ushort y] {
         get {
             if (x >= Width)
-                throw new IndexOutOfRangeException(string.Format("Cannot get site at ({0},{1}) beacuse width is only {2}", x, y, Width));
+                throw new IndexOutOfRangeException(
+                    string.Format("Cannot get site at ({0},{1}) beacuse width is only {2}", x, y, Width));
             if (y >= Height)
-                throw new IndexOutOfRangeException(string.Format("Cannot get site at ({0},{1}) beacuse height is only {2}", x, y, Height));
+                throw new IndexOutOfRangeException(
+                    string.Format("Cannot get site at ({0},{1}) beacuse height is only {2}", x, y, Height));
             return _sites[x, y];
         }
     }
@@ -169,12 +165,12 @@ public class Map
     /// <summary>
     /// Returns the width of the map.
     /// </summary>
-    public ushort Width => (ushort)_sites.GetLength(0);
+    public ushort Width => (ushort) _sites.GetLength(0);
 
     /// <summary>
     ///  Returns the height of the map.
     /// </summary>
-    public ushort Height => (ushort)_sites.GetLength(1);
+    public ushort Height => (ushort) _sites.GetLength(1);
 
     #region Implementation
 
@@ -182,11 +178,7 @@ public class Map
 
     private Map(ushort width, ushort height) {
         _sites = new Site[width, height];
-        for (ushort x = 0; x < width; x++) {
-            for (ushort y = 0; y < height; y++) {
-                _sites[x, y] = new Site();
-            }
-        }
+        for (ushort x = 0; x < width; x++) for (ushort y = 0; y < height; y++) _sites[x, y] = new Site();
     }
 
     private static Tuple<ushort, ushort> ParseMapSize(string mapSizeStr) {
@@ -201,17 +193,17 @@ public class Map
         var mapSize = ParseMapSize(mapSizeStr);
         var map = new Map(mapSize.Item1, mapSize.Item2);
 
-        var productionValues = new Queue<string>(productionMapStr.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries));
+        var productionValues =
+            new Queue<string>(productionMapStr.Split(new[] {' '}, StringSplitOptions.RemoveEmptyEntries));
 
         ushort x, y;
-        for (y = 0; y < map.Height; y++) {
+        for (y = 0; y < map.Height; y++)
             for (x = 0; x < map.Width; x++) {
                 ushort production;
                 if (!ushort.TryParse(productionValues.Dequeue(), out production))
                     throw new ApplicationException("Could not get some production value from stdin");
                 map._sites[x, y].Production = production;
             }
-        }
 
         map.Update(gameMapStr);
 
@@ -219,5 +211,4 @@ public class Map
     }
 
     #endregion
-
 }
