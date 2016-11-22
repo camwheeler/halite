@@ -48,7 +48,7 @@ public class MyBot
 #if DEBUG
                         writer.WriteLine($"Deciding where to move for location{player}");
 #endif
-                        var location = new Location { X = player.X, Y = player.Y };
+                        var location = new Location (player.X, player.Y);
                         var adjacent = new List<Unit> { player.North, player.East, player.South, player.West };
 #if DEBUG
                         writer.WriteLine($"\tFound adjacent players: \n\tNorth{player.North}\n\tSouth{player.South}\n\tEast{player.East}\n\tWest{player.West}");
@@ -113,22 +113,22 @@ public class MyBot
 
         for (int x = minX; x != maxX; Wrap(ref x, map.Width)) {
             if (map[(ushort)x, minY].Owner != myID)
-                return new Location { X = (ushort)x, Y = minY };
+                return new Location((ushort)x, minY);
         }
 
         for (int x = minX; x != maxX; Wrap(ref x, map.Width)) {
             if (map[(ushort)x, maxY].Owner != myID)
-                return new Location { X = (ushort)x, Y = maxY };
+                return new Location((ushort)x, maxY);
         }
 
         for (int y = minY; y != maxY; Wrap(ref y, map.Height)) {
             if (map[minX, (ushort)y].Owner != myID)
-                return new Location { X = minX, Y = (ushort)y};
+                return new Location(minX,(ushort)y);
         }
 
         for (int y = minY; y != maxY; Wrap(ref y, map.Height)) {
             if (map[maxX, (ushort)y].Owner != myID)
-                return new Location { X = maxX, Y = (ushort)y };
+                return new Location(maxX, (ushort)y);
         }
 
         return CheckBoundingSquare(minX, minY, maxX, maxY);

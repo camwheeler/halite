@@ -14,13 +14,22 @@ public static class Log
     /// File must exist
     /// </summary>
     public static void Setup(string logPath) {
-        File.Create(logPath).Close();
         _logPath = logPath;
+        File.Create(_logPath);
+    }
+
+    public static void MoreInformation(string message) {
+#if DEBUG
+        if (!string.IsNullOrEmpty(_logPath))
+            File.AppendAllText(_logPath, message);
+#endif
     }
 
     public static void Information(string message) {
+#if DEBUG
         if (!string.IsNullOrEmpty(_logPath))
             File.AppendAllLines(_logPath, new[] {$"{DateTime.Now.ToShortTimeString()}: {message}"});
+#endif
     }
 
     public static void Error(Exception exception) { Information($"ERROR: {exception.Message} {exception.StackTrace}"); }
@@ -52,17 +61,23 @@ public static class Networking
     /// <summary>
     /// Call every frame to update the map to the next one provided by the environment.
     /// </summary>
-    public static void getFrame(ref Map map) { map.Update(ReadNextLine()); }
+    public static void getFrame(ref Map map) {
+        map.Update(ReadNextLine());
+    }
 
     /// <summary>
     /// Call to acknowledge the initail game map and start the game.
     /// </summary>
-    public static void SendInit(string botName) { SendString(botName); }
+    public static void SendInit(string botName) {
+        SendString(botName);
+    }
 
     /// <summary>
     /// Call to send your move orders and complete your turn.
     /// </summary>
-    public static void SendMoves(IEnumerable<Move> moves) { SendString(Move.MovesToString(moves)); }
+    public static void SendMoves(IEnumerable<Move> moves) {
+        SendString(Move.MovesToString(moves));
+    }
 }
 
 public enum Direction
@@ -76,37 +91,42 @@ public enum Direction
 
 public class Site
 {
+    public Site(ushort x, ushort y, ushort width, ushort height) {
+        Location = new Location {X = x, Y = y};
+        North = new Location {X = x, Y = (ushort) (y > 0 ? y - 1 : height - 1)};
+        South = new Location {X = x, Y = (ushort) (y < height - 1 ? y + 1 : 0)};
+        East = new Location {Y = y, X = (ushort) (x < width - 1 ? x + 1 : 0)};
+        West = new Location {Y = y, X = (ushort) (x > 0 ? x - 1 : width - 1)};
+        Owner = 0;
+        Strength = 0;
+        Production = 0;
+    }
+
+    public Location Location { get; }
     public ushort Owner { get; internal set; }
     public ushort Strength { get; internal set; }
     public ushort Production { get; internal set; }
+
+    public Location North { get; }
+    public Location East { get; }
+    public Location South { get; }
+    public Location West { get; }
+
+    public override string ToString() {
+        return $"\t[{Location.X},{Location.Y}]: S {Strength} | O {Owner} | P {Production}";
+    }
+
+    public Location Go(Direction direction) {
+        return (Location) typeof(Location).GetProperty(direction.ToString()).GetValue(this, null);
+    }
 }
 
 public class Location
 {
-    public Location(ushort x, ushort y) {
-        X = x;
-        Y = y;
-    }
-
     public ushort X;
     public ushort Y;
 
-    protected bool Equals(Location other) { return X == other.X && Y == other.Y; }
-
-    public override bool Equals(object obj) {
-        if (ReferenceEquals(null, obj)) return false;
-        if (ReferenceEquals(this, obj)) return true;
-        if (obj.GetType() != this.GetType()) return false;
-        return Equals((Location) obj);
-    }
-
-    public override int GetHashCode() {
-        unchecked {
-            return (X.GetHashCode()*397) ^ Y.GetHashCode();
-        }
-    }
-
-    public override string ToString() { return $"[X,Y]"; }
+    public override string ToString() { return $"[{X},{Y}]"; }
 }
 
 public class Move
@@ -114,7 +134,10 @@ public class Move
     public Location Location;
     public Direction Direction;
 
-    internal static string MovesToString(IEnumerable<Move> moves) { return string.Join(" ", moves.Select(m => string.Format("{0} {1} {2}", m.Location.X, m.Location.Y, (int) m.Direction))); }
+    internal static string MovesToString(IEnumerable<Move> moves) {
+        return string.Join(" ",
+            moves.Select(m => string.Format("{0} {1} {2}", m.Location.X, m.Location.Y, (int) m.Direction)));
+    }
 }
 
 /// <summary>
@@ -144,11 +167,11 @@ public class Map
             }
         }
 
-        var strengthValues = gameMapValues; // Referencing same queue, but using a name that is more clear
+        // Parse strength values
         for (y = 0; y < Height; y++)
             for (x = 0; x < Width; x++) {
                 ushort strength;
-                if (!ushort.TryParse(strengthValues.Dequeue(), out strength))
+                if (!ushort.TryParse(gameMapValues.Dequeue(), out strength))
                     throw new ApplicationException("Could not get some strength value from stdin");
                 _sites[x, y].Strength = strength;
             }
@@ -190,7 +213,8 @@ public class Map
 
     private Map(ushort width, ushort height) {
         _sites = new Site[width, height];
-        for (ushort x = 0; x < width; x++) for (ushort y = 0; y < height; y++) _sites[x, y] = new Site();
+        for (ushort x = 0; x < width; x++)
+            for (ushort y = 0; y < height; y++) _sites[x, y] = new Site(x, y, width, height);
     }
 
     private static Tuple<ushort, ushort> ParseMapSize(string mapSizeStr) {
@@ -222,5 +246,52 @@ public class Map
         return map;
     }
 
+    public List<Site> GetOwnedSites(ushort[] ownedBy) {
+        var ownedSites = new List<Site>();
+        for (ushort y = 0; y < Height; y++)
+            for (ushort x = 0; x < Width; x++)
+                if (ownedBy.Contains(_sites[x, y].Owner))
+                    ownedSites.Add(_sites[x, y]);
+        return ownedSites;
+    }
+
+    public Direction FindNearestPerimeter(Site site, ushort myId) {
+        var location = CheckBoundingSquareOwnership(site.Location, site.Location, new[] {myId});
+        var orientation = Math.Abs(site.Location.X - location.X) > Math.Abs(site.Location.Y - location.Y)
+            ? Orientation.Horizontal
+            : Orientation.Vertical;
+        if (orientation == Orientation.Horizontal)
+            return site.Location.X - location.X > 0 ? Direction.West : Direction.East;
+        return site.Location.Y - location.Y > 0 ? Direction.North : Direction.South;
+    }
+
+    private Location CheckBoundingSquareOwnership(Location min, Location max, ushort[] ignoredOwners) {
+        min = this[this[min].West].North;
+        max = this[this[min].East].South;
+
+        for (var x = min.X; x != max.X; x = this[x, min.Y].East.X)
+            if (!ignoredOwners.Any(o => o == this[x, min.Y].Owner))
+                return new Location {X = x, Y = min.Y};
+
+        for (var x = min.X; x != max.X; x = this[x, max.Y].East.X)
+            if (!ignoredOwners.Any(o => o == this[x, max.Y].Owner))
+                return new Location {X = x, Y = max.Y};
+
+        for (var y = min.Y; y != max.Y; y = this[min.X, y].South.Y)
+            if (!ignoredOwners.Any(o => o == this[min.X, y].Owner))
+                return new Location {X = min.X, Y = y};
+
+        for (var y = min.Y; y != max.Y; y = this[max.X, y].South.Y)
+            if (!ignoredOwners.Any(o => o == this[max.X, y].Owner))
+                return new Location {X = max.X, Y = y};
+        return CheckBoundingSquareOwnership(min, max, ignoredOwners);
+    }
+
     #endregion
+}
+
+public enum Orientation
+{
+    Horizontal,
+    Vertical
 }
